@@ -23,12 +23,13 @@ app.get('/ship', (req, res) => {
 
   ws.on('open', () => {
     console.log('🟢 Connessione WebSocket aperta');
-    const subscriptionMessage = {
-      APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
-BoundingBoxes: [[[40.5, 8.0], [43.0, 11.0]]],
-      FiltersShipMMSI: [String(mmsi)],
-      FilterMessageTypes: ['PositionReport']
-    };
+const subscriptionMessage = {
+  APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
+  BoundingBoxes: [[[40.5, 8.0], [43.0, 11.0]]],
+  FiltersShipMMSI: [mmsi]
+  // rimuovi "FilterMessageTypes"
+};
+
     ws.send(JSON.stringify(subscriptionMessage));
   });
 
