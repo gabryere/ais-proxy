@@ -18,7 +18,7 @@ app.get('/ship', (req, res) => {
 
   ws.on('open', () => {
     const sub = {
-      APIKey: process.env.AIS_API_KEY,
+    APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
       BoundingBoxes: [[[35, 8], [45, 15]]],
       FiltersShipMMSI: [mmsi],
       FilterMessageTypes: ['PositionReport']
