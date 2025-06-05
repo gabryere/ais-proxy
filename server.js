@@ -14,36 +14,36 @@ app.get('/ship', (req, res) => {
 
   const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
+  let responded = false;
+
   const timeout = setTimeout(() => {
-    ws.close();
-    console.log('⏰ Timeout: nessun dato ricevuto per MMSI', mmsi);
-    return res.status(504).json({ error: 'Timeout senza dati' });
-  }, 15000); // 15 secondi
+    if (!responded) {
+      ws.terminate();
+      return res.status(504).json({ error: 'Timeout senza dati' });
+    }
+  }, 12000); // 12 secondi di margine
 
   ws.on('open', () => {
-    console.log('✅ WebSocket aperto');
-    const subscriptionMessage = {
-      APIKey: '79266697628a5f300be605eaff2365e40cd6595b', // assicurati che sia valida
+    console.log('✅ Connessione WebSocket aperta');
+    ws.send(JSON.stringify({
+      APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
       BoundingBoxes: [[[-90, -180], [90, 180]]],
-      FiltersShipMMSI: [mmsi],
+      FiltersShipMMSI: [String(mmsi)],
       FilterMessageTypes: ['PositionReport']
-    };
-    ws.send(JSON.stringify(subscriptionMessage));
+    }));
   });
 
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data);
-
       if (message.MessageType === 'PositionReport') {
         const report = message.Message.PositionReport;
         const meta = message.MetaData;
 
-        console.log('📡 Ricevuto messaggio:', meta?.MMSI, report?.Sog, meta?.latitude, meta?.longitude);
-
-        if (meta && meta.MMSI?.toString() === mmsi) {
-          clearTimeout(timeout);
+        if (meta && String(meta.MMSI) === String(mmsi)) {
+          responded = true;
           ws.close();
+          clearTimeout(timeout);
           return res.json({
             latitude: meta.latitude,
             longitude: meta.longitude,
@@ -58,13 +58,17 @@ app.get('/ship', (req, res) => {
 
   ws.on('error', (err) => {
     clearTimeout(timeout);
-    console.error('❌ Errore WebSocket:', err);
-    return res.status(500).json({ error: 'Errore WebSocket' });
+    console.error('❌ Errore WebSocket:', err.message);
+    if (!responded) res.status(500).json({ error: 'Errore WebSocket' });
   });
 
   ws.on('close', () => {
+    if (!responded) {
+      console.log('❌ WebSocket chiuso senza risposta utile');
+    } else {
+      console.log('✅ WebSocket chiuso dopo risposta');
+    }
     clearTimeout(timeout);
-    console.log('🔌 WebSocket chiuso');
   });
 });
 
