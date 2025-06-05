@@ -1,7 +1,7 @@
 {
   "name": "ais-proxy",
   "version": "1.0.0",
-  "description": "AIS Proxy Server",
+  "description": "Proxy AIS con WebSocket",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
