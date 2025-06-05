@@ -25,7 +25,7 @@ app.get('/ship', (req, res) => {
     console.log('🟢 Connessione WebSocket aperta');
     const subscriptionMessage = {
       APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
-      BoundingBoxes: [[[-90, -180], [90, 180]]],  // Copertura globale
+BoundingBoxes: [[[40.5, 8.0], [43.0, 11.0]]],
       FiltersShipMMSI: [String(mmsi)],
       FilterMessageTypes: ['PositionReport']
     };
