@@ -4,52 +4,52 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-
 const PORT = process.env.PORT || 10000;
-const AIS_API_KEY = '79266697628a5f300be605eaff2365e40cd6595b';
 
 app.get('/ship', (req, res) => {
   const mmsi = req.query.mmsi;
   if (!mmsi) return res.status(400).json({ error: 'MMSI mancante' });
 
   const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
-
   const timeout = setTimeout(() => {
     ws.close();
-    return res.status(504).json({ error: 'Timeout' });
-  }, 10000);
+    return res.status(504).json({ error: 'Timeout senza dati' });
+  }, 7000);
 
   ws.on('open', () => {
-    ws.send(JSON.stringify({
-      APIKey: AIS_API_KEY,
+    const sub = {
+      APIKey: process.env.AIS_API_KEY,
       BoundingBoxes: [[[35, 8], [45, 15]]],
       FiltersShipMMSI: [mmsi],
       FilterMessageTypes: ['PositionReport']
-    }));
+    };
+    ws.send(JSON.stringify(sub));
   });
 
-  ws.on('message', (data) => {
+  ws.on('message', data => {
     try {
       const msg = JSON.parse(data);
       if (msg.MessageType === 'PositionReport') {
-        const report = msg.Message.PositionReport;
-        if (report && report.UserID.toString() === mmsi) {
+        const meta = msg.MetaData;
+        const body = msg.Message.PositionReport;
+        if (meta && meta.MMSI.toString() === mmsi) {
           clearTimeout(timeout);
           ws.close();
           return res.json({
-            latitude: report.Latitude,
-            longitude: report.Longitude,
-            speed: report.Sog
+            latitude: meta.latitude,
+            longitude: meta.longitude,
+            speed: body.Sog
           });
         }
       }
     } catch (err) {
-      console.error('Errore:', err);
+      console.error('Errore parsing:', err);
     }
   });
 
-  ws.on('error', (err) => {
+  ws.on('error', err => {
     clearTimeout(timeout);
+    console.error('Errore WebSocket:', err);
     return res.status(500).json({ error: 'Errore WebSocket' });
   });
 
