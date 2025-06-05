@@ -23,14 +23,12 @@ app.get('/ship', (req, res) => {
     }
   }, 12000); // 12 secondi di margine
 
-  ws.on('open', () => {
-    console.log('✅ Connessione WebSocket aperta');
-    ws.send(JSON.stringify({
-      APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
-      BoundingBoxes: [[[-90, -180], [90, 180]]],
-      FiltersShipMMSI: [String(mmsi)],
-      FilterMessageTypes: ['PositionReport']
-    }));
+ ws.send(JSON.stringify({
+  APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
+  BoundingBoxes: [[[-90, -180], [90, 180]]], // Copertura globale
+  FiltersShipMMSI: [String(mmsi)],
+  FilterMessageTypes: ['PositionReport']
+}));
   });
 
   ws.on('message', (data) => {
