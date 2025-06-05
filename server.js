@@ -1,73 +1,93 @@
 const express = require('express');
-const WebSocket = require('ws');
+const axios = require('axios');
+const cheerio = require('cheerio');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
-
 const PORT = process.env.PORT || 10000;
 
-app.get('/ship', (req, res) => {
-  const mmsi = req.query.mmsi;
-  if (!mmsi) {
-    return res.status(400).json({ error: 'MMSI mancante' });
-  }
-
-  const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
-
-  const timeout = setTimeout(() => {
-    ws.close();
-    console.log(`❌ Timeout: nessun dato ricevuto per MMSI ${mmsi}`);
-    return res.status(504).json({ error: 'Timeout senza dati' });
-  }, 12000);
-
-  ws.on('open', () => {
-    console.log('🟢 Connessione WebSocket aperta');
-const subscriptionMessage = {
-  APIKey: '79266697628a5f300be605eaff2365e40cd6595b',
-  BoundingBoxes: [[[40.5, 8.0], [43.0, 11.0]]],
-  FiltersShipMMSI: [mmsi]
-  // rimuovi "FilterMessageTypes"
+const ships = {
+  "247484300": "https://www.shipxplorer.com/vessel/MOBY-LEGACY-IMO-9837511-MMSI-247484300",
+  "247286700": "https://www.shipxplorer.com/vessel/CRUISE-SARDEGNA-IMO-9351505-MMSI-247286700"
 };
 
-    ws.send(JSON.stringify(subscriptionMessage));
-  });
+// punti rotta verso Olbia
+const routePoints = [
+  { lat: 41.0216834, lon: 9.7271262 },
+  { lat: 40.9878593, lon: 9.7146948 },
+  { lat: 40.9698297, lon: 9.6908041 },
+  { lat: 40.9227016, lon: 9.5798481 },
+  { lat: 40.9230152, lon: 9.5298363 } // Porto di Olbia
+];
 
-  ws.on('message', (data) => {
-    try {
-      const message = JSON.parse(data);
-      if (message.MessageType === 'PositionReport') {
-        const metadata = message.MetaData;
-        const report = message.Message.PositionReport;
+function toRad(deg) {
+  return deg * Math.PI / 180;
+}
 
-        if (metadata && metadata.MMSI.toString() === mmsi) {
-          clearTimeout(timeout);
-          ws.close();
-          console.log(`✅ Dati ricevuti per MMSI ${mmsi}`);
-          return res.json({
-            latitude: metadata.latitude,
-            longitude: metadata.longitude,
-            speed: report.Sog
-          });
-        }
-      }
-    } catch (err) {
-      console.error('❌ Errore parsing messaggio:', err);
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371; // km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function totalDistance(position, waypoints) {
+  let total = 0;
+  let start = position;
+
+  for (const point of waypoints) {
+    total += haversine(start.lat, start.lon, point.lat, point.lon);
+    start = point;
+  }
+
+  return total * 0.539957; // km to nautical miles
+}
+
+app.get('/ship', async (req, res) => {
+  const mmsi = req.query.mmsi;
+  const url = ships[mmsi];
+
+  if (!url) return res.status(400).json({ error: 'MMSI non riconosciuto' });
+
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+
+    const coordsText = $('script').text();
+    const latMatch = coordsText.match(/latitude\s*:\s*(-?\d+\.\d+)/);
+    const lonMatch = coordsText.match(/longitude\s*:\s*(-?\d+\.\d+)/);
+    const speedMatch = coordsText.match(/speed:\s*(\d+(\.\d+)?)/);
+
+    if (!latMatch || !lonMatch || !speedMatch) {
+      return res.status(500).json({ error: 'Dati non trovati nella pagina' });
     }
-  });
 
-  ws.on('error', (err) => {
-    clearTimeout(timeout);
-    console.error('❌ Errore WebSocket:', err);
-    return res.status(500).json({ error: 'Errore WebSocket' });
-  });
+    const position = {
+      lat: parseFloat(latMatch[1]),
+      lon: parseFloat(lonMatch[1]),
+    };
 
-  ws.on('close', () => {
-    clearTimeout(timeout);
-    console.log('🔴 WebSocket chiuso');
-  });
+    const speed = parseFloat(speedMatch[1]); // nodi
+    const distance = totalDistance(position, routePoints);
+    const etaHours = distance / speed;
+    const etaMinutes = Math.round(etaHours * 60);
+    const etaTime = `${Math.floor(etaMinutes / 60)}h ${etaMinutes % 60}m`;
+
+    return res.json({
+      speed: speed.toFixed(1),
+      distance: distance.toFixed(1),
+      eta: etaTime
+    });
+
+  } catch (err) {
+    console.error('Errore:', err.message);
+    res.status(500).json({ error: 'Errore nel recupero dati' });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server attivo sulla porta ${PORT}`);
+  console.log(`✅ Server attivo su porta ${PORT}`);
 });
