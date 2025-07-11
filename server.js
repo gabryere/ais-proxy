@@ -15,7 +15,7 @@ app.get('/ship', (req, res) => {
   const timeout = setTimeout(() => {
     ws.terminate();
     return res.status(504).json({ error: 'Timeout senza dati' });
-  }, 20000); // aumentato leggermente il timeout
+  }, 12000); // aumentato leggermente il timeout
 
   ws.on('open', () => {
     const subscriptionMessage = {
